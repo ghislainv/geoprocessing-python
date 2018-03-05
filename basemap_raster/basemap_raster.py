@@ -70,55 +70,51 @@ def convertXY(xy_source, inproj, outproj):
 
 # Read the data and metadata
 ds = gdal.Open("areas_of_compromise.tif")
+gt = ds.GetGeoTransform()
+proj = ds.GetProjection()
+band = ds.GetRasterBand(1)
 
 # Build overview
-ds.BuildOverviews("nearest", [2, 4, 8])
-band = ds.GetRasterBand(1)
-band.GetOverviewCount()
+if band.GetOverviewCount() == 0:
+    ds.BuildOverviews("nearest", [5])
 
 # Get overview
-bandOv = band.GetOverview(1)
-data = bandOv.ReadAsArray()
-gt = ds.GetGeoTransform()
-proj = "+proj=aea +lat_1=20 +lat_2=-23 +lat_0=0 +lon_0=25 +x_0=0 +y_0=0 \
-+datum=WGS84 +units=m +no_defs"
-
-xres = 4000
-yres = -4000
+data = band.GetOverview(0).ReadAsArray()
 
 # get the edge coordinates and add half the resolution
 # to go to center coordinates
+xres = 5000
+yres = -5000
 xmin = gt[0] + xres * 0.5
 xmax = gt[0] + (xres * data.shape[1]) - xres * 0.5
-ymin = gt[3] + (yres * data.shape[0]) + yres * 0.5
-ymax = gt[3] - yres * 0.5
+ymin = gt[3] + (yres * data.shape[0]) - yres * 0.5
+ymax = gt[3] + yres * 0.5
 
 ds = None
 
 # create a grid of xy coordinates in the original projection
-xy_source = np.mgrid[xmin:xmax + xres:xres, ymax + yres:ymin:yres]
+xy_source = np.mgrid[xmin:xmax + xres:xres, ymax - yres:ymin:yres]
+
+# Create the projection objects for the convertion
+inproj = osr.SpatialReference()
+inproj.ImportFromWkt(proj)
+# Get the target projection from the basemap object
+outproj = osr.SpatialReference()
+proj_merc = "+lon_0=20 +lat_ts=20.0 +R=6370997.0 +proj=merc \
++x_0=-0.0 +units=m +y_0=4567371.38315"
+outproj.ImportFromProj4(proj_merc)
+
+# Convert from source projection to basemap projection
+xx, yy = convertXY(xy_source, inproj, outproj)
 
 # Create the figure and basemap object
 fig = plt.figure()
 ax = fig.add_axes([0.1, 0.1, 0.8, 0.8])
 # setup mercator map projection.
 m = Basemap(llcrnrlon=-20., llcrnrlat=-40., urcrnrlon=60., urcrnrlat=40.,
-            resolution="l", projection="merc",
-            lat_ts=20.)
+            resolution="l", projection="merc")
 
-# Create the projection objects for the convertion
-# original (Albers)
-inproj = osr.SpatialReference()
-inproj.ImportFromProj4(proj)
-
-# Get the target projection from the basemap object
-outproj = osr.SpatialReference()
-outproj.ImportFromProj4(m.proj4string)
-
-# Convert from source projection to basemap projection
-xx, yy = convertXY(xy_source, inproj, outproj)
-
-# plot the data (first layer)
+# plot the data
 im1 = m.pcolormesh(xx, yy, data.T, cmap=plt.cm.jet)
 
 # Draw country
@@ -133,6 +129,6 @@ m.drawmeridians(np.arange(-20, 60, 20), labels=[1, 1, 0, 1])
 ax.set_title("Areas of compromise")
 
 # Save plot
-plt.savefig('areas_of_compromise.png', dpi=300)
+plt.savefig("areas_of_compromise.png", dpi=150)
 
 # End
