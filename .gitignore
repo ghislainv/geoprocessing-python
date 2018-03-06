@@ -1,5 +1,6 @@
 # results
 grid_from_shp/continents/africa*
+basemap_raster/*.ovr
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
